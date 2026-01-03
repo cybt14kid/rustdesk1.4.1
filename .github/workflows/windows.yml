@@ -11,11 +11,13 @@ jobs:
     runs-on: windows-2022
 
     steps:
+      # 1️⃣ Checkout 源码
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      # 2️⃣ 安装 Rust
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -23,21 +25,26 @@ jobs:
           profile: minimal
           override: true
 
+      # 3️⃣ 安装 vcpkg + opus（Classic Mode 避免 Manifest 错误）
       - name: Install vcpkg + opus
         run: |
           git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
           C:\vcpkg\bootstrap-vcpkg.bat
-          C:\vcpkg\vcpkg.exe install opus:x64-windows-static
+          C:\vcpkg\vcpkg.exe install opus:x64-windows-static --classic
 
+      # 4️⃣ 设置 VCPKG_ROOT 环境变量，让 cargo build 可以找到
       - name: Set VCPKG_ROOT
         run: echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
 
+      # 5️⃣ 开启 Rust 回溯信息，便于调试
       - name: Set Rust backtrace
         run: echo "RUST_BACKTRACE=1" >> $env:GITHUB_ENV
 
+      # 6️⃣ 编译 RustDesk Windows 64-bit
       - name: Build RustDesk Release
         run: cargo build --release --target x86_64-pc-windows-msvc
 
+      # 7️⃣ 上传编译产物
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
