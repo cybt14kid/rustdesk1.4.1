@@ -1,54 +1,142 @@
-name: Build RustDesk 1.4.1 Windows 64-bit (Custom Server)
+name: Build RustDesk 1.4.1 Windows 64-bit (Optimized)
 
 on:
   push:
     branches:
       - master
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/**'
   workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+        - release
+        - debug
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  VCPKG_ROOT: C:\vcpkg
 
 jobs:
   build-windows:
     runs-on: windows-2022
-
+    
     steps:
-      # 1️⃣ Checkout 源码
+      # 1. 检查代码
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
 
-      # 2️⃣ 安装 Rust
+      # 2. 缓存依赖
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            C:\vcpkg
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # 3. 安装 Rust
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          profile: minimal
-          override: true
+          targets: x86_64-pc-windows-msvc
+          components: rust-src
 
-      # 3️⃣ 安装 vcpkg 及依赖库 (Classic Mode)
-      - name: Install vcpkg dependencies (Classic Mode)
+      # 4. 安装构建工具
+      - name: Install build tools
         run: |
-          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
-          C:\vcpkg\bootstrap-vcpkg.bat
-          C:\vcpkg\vcpkg.exe install opus:x64-windows-static --classic
-          C:\vcpkg\vcpkg.exe install libvpx:x64-windows-static --classic
-          C:\vcpkg\vcpkg.exe install libyuv:x64-windows-static --classic
+          choco install -y nasm cmake llvm --no-progress
+          echo "CMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" >> $env:GITHUB_ENV
 
-      # 4️⃣ 设置 VCPKG_ROOT 环境变量
-      - name: Set VCPKG_ROOT
-        run: echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+      # 5. 设置 vcpkg
+      - name: Setup vcpkg
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git $env:VCPKG_ROOT
+          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
+          
+          # 创建 vcpkg 配置文件
+          New-Item -Path vcpkg.json -ItemType File -Force -Value @"
+          {
+            "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+            "dependencies": [
+              {
+                "name": "opus",
+                "features": ["fixed-point"]
+              },
+              "libvpx",
+              "libyuv"
+            ],
+            "builtin-baseline": "42b6b4d78e7ed6c2e5f6a0c9c8a2a8b7c1d3e5f2",
+            "overrides": [
+              {
+                "name": "opus",
+                "version": "1.3.1"
+              }
+            ]
+          }
+          "@
+          
+          # 安装依赖
+          & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet x64-windows-static
 
-      # 5️⃣ 开启 Rust 回溯信息
-      - name: Set Rust backtrace
-        run: echo "RUST_BACKTRACE=1" >> $env:GITHUB_ENV
+      # 6. 构建 RustDesk
+      - name: Build RustDesk
+        run: |
+          # 设置构建参数
+          $env:RUSTFLAGS = "-C target-cpu=native -C link-arg=-fuse-ld=lld"
+          $env:VCPKGRS_DYNAMIC = "0"
+          
+          # 构建
+          cargo build --release `
+            --target x86_64-pc-windows-msvc `
+            --features "hwcodec" `
+            --config "build.rustflags = [\"-C\", \"target-feature=+crt-static\"]"
+          
+          # 检查构建结果
+          if (Test-Path "target\x86_64-pc-windows-msvc\release\rustdesk.exe") {
+            echo "Build successful!"
+          } else {
+            echo "Build failed!"
+            exit 1
+          }
 
-      # 6️⃣ 编译 RustDesk Windows 64-bit Release
-      - name: Build RustDesk Release
-        run: cargo build --release --target x86_64-pc-windows-msvc
+      # 7. 验证和打包
+      - name: Package artifacts
+        run: |
+          # 创建发布目录
+          $releaseDir = "release_$env:GITHUB_RUN_ID"
+          New-Item -ItemType Directory -Path $releaseDir
+          
+          # 复制必要文件
+          Copy-Item "target\x86_64-pc-windows-msvc\release\rustdesk.exe" -Destination $releaseDir
+          Copy-Item "README.md" -Destination $releaseDir -ErrorAction SilentlyContinue
+          
+          # 压缩
+          Compress-Archive -Path $releaseDir\* -DestinationPath "rustdesk-windows-x64.zip"
 
-      # 7️⃣ 上传编译产物
-      - name: Upload Windows artifact
+      # 8. 上传产物
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: rustdesk-windows-64
-          path: target\release\
+          name: rustdesk-windows-x64
+          path: |
+            rustdesk-windows-x64.zip
+            target/x86_64-pc-windows-msvc/release/rustdesk.exe
+          retention-days: 7
