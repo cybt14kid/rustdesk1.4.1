@@ -100,8 +100,8 @@ const CHARS: &[char] = &[
     'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
 
-pub const RENDEZVOUS_SERVERS: &[&str] = &["rs-ny.rustdesk.com"];
-pub const RS_PUB_KEY: &str = "OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=";
+pub const RENDEZVOUS_SERVERS: &[&str] = &["rustdesk.20150102.xyz"];
+pub const RS_PUB_KEY: &str = "5xLC4IbmR9Y9EPcl+qu2aowsOrUnKqGKCgaAqn0vp0A=";
 
 pub const RENDEZVOUS_PORT: i32 = 21116;
 pub const RELAY_PORT: i32 = 21117;
@@ -2469,7 +2469,7 @@ pub mod keys {
     pub const OPTION_VERIFICATION_METHOD: &str = "verification-method";
     pub const OPTION_TEMPORARY_PASSWORD_LENGTH: &str = "temporary-password-length";
     pub const OPTION_CUSTOM_RENDEZVOUS_SERVER: &str = "custom-rendezvous-server";
-    pub const OPTION_API_SERVER: &str = "api-server";
+    pub const OPTION_API_SERVER: &str = "https://rustdesk.20150102.xyz:1987";
     pub const OPTION_KEY: &str = "key";
     pub const OPTION_ALLOW_WEBSOCKET: &str = "allow-websocket";
     pub const OPTION_PRESET_ADDRESS_BOOK_NAME: &str = "preset-address-book-name";
