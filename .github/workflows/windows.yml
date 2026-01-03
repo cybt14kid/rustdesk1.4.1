@@ -23,10 +23,11 @@ jobs:
           profile: minimal
           override: true
 
-      - name: Install vcpkg
+      - name: Install vcpkg + opus
         run: |
           git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
           C:\vcpkg\bootstrap-vcpkg.bat
+          C:\vcpkg\vcpkg.exe install opus:x64-windows-static
 
       - name: Set VCPKG_ROOT
         run: echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
