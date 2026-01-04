@@ -11,19 +11,28 @@ jobs:
     runs-on: windows-2022
 
     steps:
+      # -------------------------------
+      # 1. Checkout 仓库
+      # -------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      # -------------------------------
+      # 2. 安装 Rust (nightly)
+      # -------------------------------
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly
           profile: minimal
           override: true
 
-      - name: Install vcpkg dependencies (Classic Mode)
+      # -------------------------------
+      # 3. 安装 vcpkg 依赖
+      # -------------------------------
+      - name: Install vcpkg dependencies
         run: |
           git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
           C:\vcpkg\bootstrap-vcpkg.bat
@@ -32,17 +41,50 @@ jobs:
           C:\vcpkg\vcpkg.exe install libyuv:x64-windows-static --classic
           C:\vcpkg\vcpkg.exe install aom:x64-windows-static --classic
 
-      - name: Set VCPKG_ROOT
-        run: echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+      # -------------------------------
+      # 4. 设置环境变量
+      # -------------------------------
+      - name: Set environment variables
+        run: |
+          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+          echo "VCPKG_DEFAULT_TRIPLET=x64-windows-static" >> $env:GITHUB_ENV
+          echo "RUST_BACKTRACE=1" >> $env:GITHUB_ENV
 
-      - name: Set Rust backtrace
-        run: echo "RUST_BACKTRACE=1" >> $env:GITHUB_ENV
-
+      # -------------------------------
+      # 5. 编译 RustDesk Release
+      # -------------------------------
       - name: Build RustDesk Release
-        run: cargo build --release --target x86_64-pc-windows-msvc
+        run: |
+          cargo clean
+          cargo build --release --target x86_64-pc-windows-msvc --verbose
 
+      # -------------------------------
+      # 6. 查找生成的 exe
+      # -------------------------------
+      - name: Find generated exe
+        id: find_exe
+        run: |
+          $exe = Get-ChildItem -Path target\x86_64-pc-windows-msvc\release\ -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { Write-Error "No exe found!" }
+          Write-Output "Found exe: $($exe.FullName)"
+          echo "EXE_PATH=$($exe.FullName)" >> $env:GITHUB_ENV
+
+      # -------------------------------
+      # 7. 打包 exe + 所有 release 文件
+      # -------------------------------
+      - name: Package release folder
+        run: |
+          $releaseDir = "target\x86_64-pc-windows-msvc\release"
+          $zipPath = "$releaseDir\rustdesk-windows-64.zip"
+          Write-Output "Creating zip: $zipPath"
+          Compress-Archive -Path "$releaseDir\*" -DestinationPath $zipPath -Force
+          echo "ZIP_PATH=$zipPath" >> $env:GITHUB_ENV
+
+      # -------------------------------
+      # 8. 上传 ZIP 文件
+      # -------------------------------
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: rustdesk-windows-64
-          path: target\release\
+          path: ${{ env.ZIP_PATH }}
