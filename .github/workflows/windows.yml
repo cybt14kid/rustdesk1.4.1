@@ -1,4 +1,4 @@
-name: Build RustDesk 1.4.1 Windows x64 (Debug Runtime)
+name: Build RustDesk 1.4.1 Windows 64-bit (Custom Server)
 
 on:
   push:
@@ -11,13 +11,11 @@ jobs:
     runs-on: windows-2022
 
     steps:
-      # 1️⃣ 拉取源码（含子模块）
-      - name: Checkout source
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      # 2️⃣ 安装 Rust
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -25,32 +23,26 @@ jobs:
           profile: minimal
           override: true
 
-      # 3️⃣ 安装 vcpkg（Classic Mode）
-      - name: Install vcpkg and deps
+      - name: Install vcpkg dependencies (Classic Mode)
         run: |
           git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
           C:\vcpkg\bootstrap-vcpkg.bat
-
           C:\vcpkg\vcpkg.exe install opus:x64-windows-static --classic
           C:\vcpkg\vcpkg.exe install libvpx:x64-windows-static --classic
           C:\vcpkg\vcpkg.exe install libyuv:x64-windows-static --classic
           C:\vcpkg\vcpkg.exe install aom:x64-windows-static --classic
 
-      # 4️⃣ 设置环境变量
-      - name: Set env
-        run: |
-          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
-          echo "RUST_BACKTRACE=full" >> $env:GITHUB_ENV
+      - name: Set VCPKG_ROOT
+        run: echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
 
-      # 5️⃣ 【关键】只编译 rustdesk 这个 binary
-      - name: Build RustDesk client
-        run: cargo build --release -p rustdesk
+      - name: Set Rust backtrace
+        run: echo "RUST_BACKTRACE=1" >> $env:GITHUB_ENV
 
-      # 6️⃣ 上传 exe + 所有 dll（不能只传 exe）
-      - name: Upload runtime
+      - name: Build RustDesk Release
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rustdesk-windows-x64
-          path: |
-            target\release\rustdesk.exe
-            target\release\*.dll
+          name: rustdesk-windows-64
+          path: target\release\
