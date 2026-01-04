@@ -1,4 +1,4 @@
-name: Build RustDesk 1.4.1 Windows 64-bit (Custom Server)
+name: Build RustDesk 1.4.1 Windows x64
 
 on:
   push:
@@ -11,38 +11,50 @@ jobs:
     runs-on: windows-2022
 
     steps:
-      - name: Checkout repository
+      # 1️⃣ 拉取源码（包含子模块）
+      - name: Checkout source
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install Rust
+      # 2️⃣ 安装 Rust
+      - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           profile: minimal
           override: true
 
-      - name: Install vcpkg dependencies (Classic Mode)
+      # 3️⃣ 安装 vcpkg（Classic Mode）及依赖
+      - name: Install vcpkg and dependencies
         run: |
           git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
           C:\vcpkg\bootstrap-vcpkg.bat
+
           C:\vcpkg\vcpkg.exe install opus:x64-windows-static --classic
           C:\vcpkg\vcpkg.exe install libvpx:x64-windows-static --classic
           C:\vcpkg\vcpkg.exe install libyuv:x64-windows-static --classic
           C:\vcpkg\vcpkg.exe install aom:x64-windows-static --classic
 
+      # 4️⃣ 设置 VCPKG_ROOT
       - name: Set VCPKG_ROOT
         run: echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
 
-      - name: Set Rust backtrace
+      # 5️⃣ 开启 Rust 回溯（出错好排查）
+      - name: Enable Rust backtrace
         run: echo "RUST_BACKTRACE=1" >> $env:GITHUB_ENV
 
-      - name: Build RustDesk Release
-        run: cargo build --release --target x86_64-pc-windows-msvc
+      # 6️⃣ 【关键】只编译 rustdesk 这个 binary
+      - name: Build RustDesk client (Windows x64)
+        run: cargo build --release -p rustdesk
 
-      - name: Upload Windows artifact
+      # 7️⃣（可选）瘦身：去符号
+      - name: Strip binary
+        run: llvm-strip target\release\rustdesk.exe
+
+      # 8️⃣ 上传最终产物（只上传 exe）
+      - name: Upload rustdesk.exe
         uses: actions/upload-artifact@v4
         with:
-          name: rustdesk-windows-64
-          path: target\release\
+          name: rustdesk-windows-x64
+          path: target\release\rustdesk.exe
